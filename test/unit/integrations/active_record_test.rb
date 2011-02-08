@@ -68,6 +68,40 @@ module ActiveRecordTest
         observer
       end
   end
+
+  class HasManyMachinesTest < BaseTestCase
+    #Create root class called child. Needed for has_many :children, ugly but works.
+    class ::Child < ActiveRecord::Base
+      connection.create_table("children", :force => :true) {|t| t.string(:state) ; t.integer(:foo_id)}
+      state_machine :state, :initial => "from" do
+        event :do do
+          transition :from => :to
+        end
+      end
+      attr_protected :state
+    end
+    def setup
+      @table = new_model do
+        has_many :children
+        accepts_nested_attributes_for :children
+      end.create :state => "from"
+      @child = @table.children.create
+    end
+    def test_should_transition_has_many_states
+      assert_equal "from", @child.state
+      assert_nil @child.state_event
+
+      #@table.children.map(&:id) # if this is called :state_event will be set after update_attributes - why?
+
+      puts [@child.state, @child.state_event, @child.changed?].inspect
+      @table.update_attributes!({:children_attributes => [{ :id => @child.id, :state_event => "do" }]})
+      puts [@child.state, @child.state_event, @child.changed?].inspect
+      @child.reload
+      puts [@child.state, @child.state_event, @child.changed?].inspect
+      assert_nil @child.state_event
+      assert_equal "to", @child.state
+    end
+  end
   
   class IntegrationTest < BaseTestCase
     def test_should_match_if_class_inherits_from_active_record
